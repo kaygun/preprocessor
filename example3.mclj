@@ -1,0 +1,23 @@
+# A literate clojure document
+
+## Take that man
+
+or don't:
+
+1. first
+2. second
+4. third
+
+and then
+
++ this 
++ that 
++ or the other.
+
+``` :display :true :results :true :code
+(defn ff [x] (* x x))
+(ff 10) 
+``` 
+
+Some stuff: [wikipedia](http://wikipedia.com)
+

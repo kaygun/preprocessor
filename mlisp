@@ -1,0 +1,12 @@
+#!/bin/sh
+
+case $1 in
+lisp) sbcl --dynamic-space-size 2000 --core /home/kaygun/local/lib/mlisp.core --script /home/kaygun/local/lib/markdown.lisp $2.mlsp $2.md 
+	;;
+scala) scala markdown.scala $2.msc > $2.md
+	;; 
+clojure) clojure markdown.clj $2.mclj > $2.md
+	;;
+esac
+pandoc -f markdown -t html --mathjax --highlight-style=tango -s -o $2.html $2.md
+cat $2.md

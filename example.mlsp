@@ -1,0 +1,70 @@
+# My first *literate lisp* document
+
+## Here is a subheading
+
+I need to write some code here
+```  
+  (defparameter x 12)
+  (defun sqr (x) (* x x))
+  (sqr x)
+``` 
+
+Let us see if the interpreter remembers what we calculated
+before:
+``` 
+  (sqr x)
+  (setf x 16)
+```  
+Some hidden code. The results should be hidden as well:
+``` hide all 
+  (setf x 10)
+```
+Let me see if the `setf` inside the hidden code above is executed:
+```
+  (sqr x)
+``` 
+
+Is the result ``(sqr 12)``  displayed without the code?
+
+How about?
+``` hide
+  (reduce (lambda (x y) (concatenate 'string x y))
+          (loop for i from 0 to 9 collect (format nil "![](digit-t3-~A.png)~%" i)))
+``` 
+or this?
+``` hide all 
+  (format nil "This should not be displayed at all!")
+```
+
+The following code block will not be evaluated.
+ 
+    (setf x 100)
+
+and let me see if this worked `` x ``.
+
+## Some math stuff
+
+Is this $\int_0^1 \sin(x)e^{-x}\, dx$ going to show up?  How about
+
+$$ \sum_{i=-1}^\infty \frac{(-1)^i}{i!}x^i $$
+
+
+## Here is another heading
+
+Some markdown stuff. Here is a list
+
+1. Item 1
+1. Item 2
+  * Bullet 1
+  * Bullet 2
+2. Item 3
+
+[A Link](http://en.wikipedia.org/wiki/Markdown)
+
+Here is a table
+
+|  | Head 1  |  Head 2 |
+|:-|:--------|:--------|
+|1 | aaa     | bbb     |
+|2 | cccc    | dddd    |
+
