@@ -15,4 +15,4 @@ clojure) clojure -J-Xmx5g -J-Xms5g -J-Xss1g $PLACE/markdown.clj $2.mclj $2.md
 	;;
 esac
 
-pandoc -f markdown -t html --css $PLACE/pandoc.css --mathjax --highlight-style=tango --metadata title="$3" -s -o $2.html $2.md
+pandoc -f markdown -t html --css $PLACE/mlisp.css --mathjax --highlight-style=tango --metadata title="$3" -s -o $2.html $2.md
