@@ -1,4 +1,5 @@
-(require '[clojure.string :as st])
+(require '[clojure.string :as st]
+         '[clojure.java.io :as io])
 
 (defn process [results]
    (reduce (fn [a b] (str a "\n" b)) results))
@@ -20,19 +21,21 @@
                (nth 0)
                slurp
                (st/split #"```"))
+       out (nth *command-line-args* 1)
        res (map (fn [x y] 
                     (if (odd? y) 
                        (read-code x)
                        (read-text x)))
                 txt 
-                (range (count txt)))]
+                (range))]
     (doseq [x res]
-       (println 
+       (spit out
           (if (x :display)
              (str "```clojure" 
                   (x :code) 
                   "```\n"
                   (if (x :results) 
-                     (str "```clojure\n" (x :output) "\n```\n")
+                     (str "```clojure\n" (x :output) "\n```")
                      ""))
-             (str (x :output))))))
+             (str (x :output)))
+          :append true)))

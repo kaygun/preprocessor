@@ -1,12 +1,13 @@
-object textScala {
+import scala.io.Source.fromFile
+import scala.tools.nsc._
+import scala.reflect.internal.Reporter
+import scala.tools.nsc.interpreter
 
-  import scala.tools.nsc.Settings
-  import scala.tools.nsc.interpreter.IMain
-  import scala.io.Source.fromFile
+object textScala {
 
   def main(args: Array[String]) {
     val settings = new Settings
-    val eval = new IMain(settings)
+    val eval = new Interpreter(settings)
     var flag = false
     val search = "```".r
     var buffer = ""
@@ -20,7 +21,7 @@ object textScala {
        else {
          if(flag) {
            println("```\n\n```scala")
-           eval.interpret(buffer)
+           eval.parse(buffer)
            println("```")
            buffer = ""
          }
