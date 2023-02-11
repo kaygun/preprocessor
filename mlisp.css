@@ -16,7 +16,7 @@ body {
   line-height: 1.7;
   padding: 1em;
   margin: auto;
-  max-width: 56em;
+  max-width: 58em;
   background: #fefefe;
 }
 
@@ -242,12 +242,12 @@ table td {
   padding: .2em 1em;
   border-top: 1px solid #ddd;
   border-left: 1px solid #ddd;
-  vertical-align: top;
+  vertical-align:top;
 }
 
 .author {
   font-size: 1.2em;
-  text-align: center;
+  text-align:center;
 }
 
 @media only screen and (min-width: 480px) {
@@ -326,3 +326,4 @@ table td {
     page-break-after: avoid;
   }
 }
+
