@@ -17,7 +17,14 @@ There is a shell file that dispatches the correct preprocessor.
 Depending on the $LANG it will process the markdown file. **Nothing gets 
 touched** except the embedded lisp/scala/clojure code.
 
-    mlisp $FILE
+    mlisp $FILE $TITLE
+
+You may provide a title at the prompt, or you may add it in the markdown
+file in the preamble as
+
+    ---
+    title: $TITLE
+    ---
 
 For clojure use '.mclj', for lisp use '.mlisp', for python use '.mpy'
 and for scala use '.msc' as extensions. The program will watch the 
