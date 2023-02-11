@@ -1,5 +1,3 @@
-(require :cl-ppcre)
-
 (defun helper (x) (eval (read-from-string x)))
 
 (defun process-inline-code (line out)
