@@ -1,4 +1,4 @@
-# A Text Preprocessor for Markdown
+# A Ployglot Preprocessor for Literate Programming
 
 ## Why?
 
