@@ -11,19 +11,19 @@ inotifywait -m -q -e modify $name.$extension | \
       case $extension in
            mpy) python3 $PLACE/markdown.py $name.mpy $name.md
            ;;
-           mlisp) sbcl --dynamic-space-size 2000 --core $PLACE/mlisp.core \
-                       --script $PLACE/markdown.lisp $name.mlsp $name.md 
+           mlsp) sbcl --dynamic-space-size 2000 --core $PLACE/mlisp.core \
+                      --script $PLACE/markdown.lisp $name.mlsp $name.md 
            ;;
            msc) scala -cp $4 $PLACE/markdown.scala $name.msc > $name.md
            ;; 
            mclj) clj -J-Xmx5g -J-Xms5g -J-Xss1g $PLACE/markdown.clj $name.mclj $name.md
            ;;
       esac
+      pandoc -s -f markdown -t html --mathjax --highlight-style=tango \
+	     --css $PLACE/mlisp.css --metadata title="$title" \
+	     -o $name.html $name.md
       echo -e "\n\n" >> $name.md
       echo "::: {#footer}" >> $name.md
       echo "[" $(date  +"%B %d, %Y %r") "]{#timestamp}" >> $name.md
       echo ":::" >> $name.md
-      pandoc -s -f markdown -t html --mathjax --highlight-style=tango \
-	     --css $PLACE/mlisp.css --metadata title="$title" \
-	     -o $name.html $name.md
    done
