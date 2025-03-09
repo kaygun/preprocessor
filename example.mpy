@@ -1,0 +1,34 @@
+# This is a header
+
+## This is a subheader
+
+This is a [link](file:///home/kaygun/local/data/Dropbox/Misc/log.txt "log.txt") to a local file.
+
+The following is some random python code whose evaluation should *not* appear after the
+code is displayed.
+
+```{'results': True, 'echo': True}
+x = 10
+
+def sqr(u):
+    return u*u
+
+print(sqr(x))
+```
+
+Let us see if it still remembers the results and prints them
+
+```{'results': True, 'echo': False}
+print(sqr(12))
+```
+
+One without echo
+```{'results': False, 'echo': False}
+for i in range(10):
+    print(i)
+```
+
+Last test case:
+```{'results': False, 'echo': True}
+print(x)
+```

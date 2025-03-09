@@ -1,4 +1,4 @@
-# A Text Preprocessor for Markdown
+# A Ployglot Preprocessor for Literate Programming
 
 ## Why?
 
@@ -14,13 +14,22 @@ of the text.  My constraints were:
   or frameworks.
 
 There is a shell file that dispatches the correct preprocessor.
+Depending on the $LANG it will process the markdown file. **Nothing gets 
+touched** except the embedded lisp/scala/clojure code.
 
-    mlisp $LANG $FILE
+    mlisp $FILE $TITLE
 
-Use $FILE without the extension.  That's it.
+You may provide a title at the prompt, or you may add it in the markdown
+file in the preamble as
 
-You can process a markdown file and **nothing gets touched** except 
-the embedded lisp/scala/clojure code.
+    ---
+    title: $TITLE
+    ---
+
+For clojure use '.mclj', for lisp use '.mlisp', for python use '.mpy'
+and for scala use '.msc' as extensions. The program will watch the 
+$FILE and when it is modified, it will process and spit out an HTML 
+file until it is killed.
 
 ## Short Tutorial
 
