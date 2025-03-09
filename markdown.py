@@ -1,58 +1,90 @@
-#!/usr/bin/python
-
-import os
 import sys
-import io 
+import io
+import ast
 
+def process_markdown(input_file, output_file):
+    """Processes a markdown file, executing code blocks and formatting output."""
+    with open(input_file, "r") as infile:
+        lines = infile.readlines()
 
-with open(sys.argv[1],"r") as infile:
-    lines = infile.readlines()
+    block = {'results': True, 'echo': True}
+    inside_code_block = False
+    command = ""
+    exec_context = {}  # Persistent execution context across blocks
 
-flag = False
-command = ''
-block={'results': True, 'echo': True}
+    with open(output_file, "w") as outfile:
+        for line in lines:
+            if line.startswith("```"):
+                if not inside_code_block:
+                    # Start of a code block
+                    command = ""
+                    rest = line[3:].strip()
 
-outfile = open(sys.argv[2],"w")
-for x in lines:
-    if(x[0:3]=="```"):
-      if(not(flag)):
-         command = ''
-         rest = x[3:]
-         exec("block.update("+rest+")")
-         if(block['echo']):
-           outfile.write("```python\n")
-      else:
-         if(block['echo']):
-            outfile.write("```\n")
-            if(block['results']):
-                outfile.write("\n```python\n")
-         res = io.StringIO()
-         sys.stdout = res
-         exec(command)
-         sys.stdout = sys.__stdout__
-         if(block['results']):
-            outfile.write(res.getvalue())
-            if(block['echo']):
-               outfile.write('```\n')
-      flag = not(flag)
-      outfile.flush()
-      continue
+                    if rest:  # Ensure it's not empty
+                        try:
+                            settings = ast.literal_eval(rest) if rest.startswith("{") else {}
+                            if isinstance(settings, dict):
+                                block.update(settings)
+                        except Exception as e:
+                            outfile.write(f"\nError parsing block settings: {e}\n")
 
-    if(flag): 
-      command = command + x
-      if(block['echo']):
-        outfile.write(x)
+                    if block['echo']:
+                        outfile.write("```python\n")
+                else:
+                    # End of a code block
+                    if block['echo']:
+                        outfile.write("```\n")
+                        if block['results']:
+                            outfile.write("\n```python\n")
+
+                    # Capture and execute the code
+                    res = io.StringIO()
+                    sys.stdout = res
+
+                    try:
+                        exec(command, exec_context)  # Use persistent execution context
+                    except Exception as e:
+                        res.write(f"Execution error: {e}\n")
+
+                    sys.stdout = sys.__stdout__
+
+                    if block['results']:
+                        outfile.write(res.getvalue())
+                        if block['echo']:
+                            outfile.write("```\n")
+
+                inside_code_block = not inside_code_block
+                outfile.flush()
+                continue
+
+            if inside_code_block:
+                command += line
+                if block['echo']:
+                    outfile.write(line)
+            else:
+                process_inline_code(line, outfile, exec_context)
+
+def process_inline_code(line, outfile, exec_context):
+    """Processes inline backticks and executes embedded Python expressions."""
+    parts = line.strip("\n").split("`")
+    num_parts = len(parts)
+
+    if num_parts == 1:
+        outfile.write(line)
     else:
-      u = x.strip('\n').split("`")
-      N = len(u)
-      if(N == 1):
-         outfile.write(x)
-      else:
-         for i in range(N):
-             if(i%2 == 0):
-               outfile.write(u[i])
-             else:
-               exec("outfile.write(" + u[i] + ",end='')")
-      outfile.flush()
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                outfile.write(part)
+            else:
+                try:
+                    outfile.write(str(eval(part, exec_context)))  # Use shared context
+                except Exception as e:
+                    outfile.write(f"[Error: {e}]")
+    outfile.flush()
 
-outfile.close()
+if len(sys.argv) < 3:
+   print("Usage: python script.py input.md output.md")
+   sys.exit(1)
+
+process_markdown(sys.argv[1], sys.argv[2])
+
