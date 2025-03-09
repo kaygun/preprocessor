@@ -1,12 +1,14 @@
 #!/bin/sh
+PLACE=${HOME}/local/lib
 
 case $1 in
-lisp) sbcl --dynamic-space-size 2000 --script markdown.lisp $2.mlsp $2.md 
+python)	python $PLACE/markdown.py $2.mpy $2.md
 	;;
-scala) scala markdown.scala $2.msc > $2.md
+lisp) sbcl --dynamic-space-size 2000 --core $PLACE/mlisp.core --script $PLACE/markdown.lisp $2.mlsp $2.md 
+	;;
+scala) scala -cp $4 $PLACE/markdown.scala $2.msc > $2.md
 	;; 
-clojure) clojure markdown.clj $2.mclj > $2.md
+clojure) clojure -J-Xmx5g -J-Xms5g -J-Xss1g $PLACE/markdown.clj $2.mclj $2.md
 	;;
 esac
-pandoc -f markdown -t html --mathjax --highlight-style=tango -s -o $2.html $2.md
-cat $2.md
+pandoc -f markdown -t html --css $PLACE/pandoc.css --mathjax --highlight-style=tango --metadata title="$3" -s -o $2.html $2.md
