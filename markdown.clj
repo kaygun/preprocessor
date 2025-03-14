@@ -1,41 +1,44 @@
-(require '[clojure.string :as st]
-         '[clojure.java.io :as io])
+(ns prep
+  (:require [clojure.string :as st]
+            [clojure.java.io :as io]))
 
-(defn process [results]
-   (reduce (fn [a b] (str a "\n" b)) results))
+(defn join-lines [lines]
+  "Joins a sequence of lines with newlines."
+  (apply str (interpose "\n" lines)))
 
-(defn read-text [text]
-   {:results :true :output text})
+(defn wrap-text [text]
+  "Wraps plain text in a result map."
+  {:results true :output text})
 
-(defn read-code [command]
-   (let [[head code] (st/split command #":code")]
-      (merge 
-         (eval (read-string (str "{" head "}")))
-         {:code code}
-         {:output (-> (str "(list " code ")")
-                      read-string
-                      eval
-                      process)})))
+(defn execute-code [command]
+  "Processes a code block, evaluates it, and returns structured results."
+  (let [[meta code] (st/split command #":code" 2)
+        metadata-map (eval (read-string (str "{" meta "}")))]
+    (merge metadata-map
+           {:code code
+            :output (join-lines (eval (read-string (str "(list " code ")"))))})))
 
-(let* [txt (-> *command-line-args*
-               (nth 0)
-               slurp
-               (st/split #"```"))
-       out (nth *command-line-args* 1)
-       res (map (fn [x y] 
-                    (if (odd? y) 
-                       (read-code x)
-                       (read-text x)))
-                txt 
-                (range))]
-    (doseq [x res]
-       (spit out
-          (if (x :display)
-             (str "```clojure" 
-                  (x :code) 
-                  "```\n"
-                  (if (x :results) 
-                     (str "```clojure\n" (x :output) "\n```")
-                     ""))
-             (str (x :output)))
-          :append true)))
+(defn process-input [input output-file]
+  "Reads input, processes it as alternating text and code blocks, and writes to output."
+  (let [segments (st/split (slurp input) #"```")
+        results  (map-indexed 
+                   (fn [idx segment]
+                     (if (odd? idx) 
+                       (execute-code segment)
+                       (wrap-text segment)))
+                   segments)]
+    (doseq [result results]
+      (spit output-file
+            (if (:display result)
+              (str "```clojure\n" (:code result) "\n```\n"
+                   (when (:results result)
+                     (str "```clojure\n" (:output result) "\n```")))
+              (:output result))
+            :append true))))
+
+;; Entry point
+(let [args *command-line-args*
+      input-file (first args)
+      output-file (second args)]
+  (process-input input-file output-file))
+
