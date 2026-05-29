@@ -1,26 +1,85 @@
-#!/bin/sh
-PLACE=${HOME}/local/lib
+#!/bin/bash
 
-name=$(echo $1 | cut -d. -f1)
-extension=$(echo $1 | cut -d. -f2)
-title=$2
+# Configuration
+PLACE=$HOME/local/lib/
 
-rm $name.{md,html}
-case $extension in
-     mpy) python3 $PLACE/markdown.py $name.mpy $name.md
-     ;;
-     mlsp) sbcl --dynamic-space-size 2000 --core $PLACE/mlisp.core \
-                --script $PLACE/markdown.lisp $name.mlsp $name.md 
-     ;;
-     msc) scala -cp $4 $PLACE/markdown.scala $name.msc > $name.md
-     ;; 
-     mclj) clj -J-Xmx5g -J-Xms5g -J-Xss1g $PLACE/markdown.clj $name.mclj $name.md
-     ;;
-esac
-pandoc -s -f markdown -t html --mathjax --highlight-style=tango \
-       --css $PLACE/mlisp.css --metadata title="$title" \
-       -o $name.html $name.md
-echo -e "\n\n" >> $name.md
-echo "::: {#footer}" >> $name.md
-echo "[" $(date  +"%B %d, %Y %r") "]{#timestamp}" >> $name.md
-echo ":::" >> $name.md
+if [ -z "$1" ]; then
+    echo "Usage: $0 <file.ext> [title]"
+    echo "Supported extensions: .mpy, .mlsp, .msc, .mclj"
+    exit 1
+fi
+
+INPUT_FILE="$1"
+FILENAME="${INPUT_FILE%.*}"
+EXTENSION="${INPUT_FILE##*.}"
+TITLE="${2:-$FILENAME}"
+
+process_file() {
+    echo "Processing $INPUT_FILE..."
+    
+    # Clean up previous outputs
+    rm -f "$FILENAME.md" "$FILENAME.html"
+
+    # 1. Run the language-specific preprocessor
+    case "$EXTENSION" in
+        mpy)
+            python3 "$PLACE/markdown.py" "$INPUT_FILE" "$FILENAME.md"
+            ;;
+        mlsp)
+            sbcl --dynamic-space-size 2000 --core "$PLACE/mlisp.core" \
+                 --script "$PLACE/markdown.lisp" "$INPUT_FILE" "$FILENAME.md"
+            ;;
+        msc)
+            # Assuming markdown.sc is a scala script. 
+            # Note: original used $4 for classpath, here we default to empty if not provided.
+            scala "$PLACE/markdown.sc" "$INPUT_FILE" > "$FILENAME.md"
+            ;;
+        mclj)
+            clj -J-Xmx5g -J-Xms5g -J-Xss1g "$PLACE/markdown.clj" "$INPUT_FILE" "$FILENAME.md"
+            ;;
+        *)
+            echo "Unknown extension: $EXTENSION"
+            return 1
+            ;;
+    esac
+
+    if [ ! -f "$FILENAME.md" ]; then
+        echo "Error: Preprocessor failed to create $FILENAME.md"
+        return 1
+    fi
+
+    # 2. Add footer to Markdown BEFORE pandoc runs so it's included in HTML
+    {
+        echo -e "\n\n"
+        echo "::: {#footer}"
+        echo "[" $(date +"%B %d, %Y %r") "]{#timestamp}"
+        echo ":::"
+    } >> "$FILENAME.md"
+
+    # 3. Convert to HTML
+    if command -v pandoc >/dev/null 2>&1; then
+        pandoc -s -f markdown -t html --mathjax --highlight-style=tango \
+               --css "$PLACE/mlisp.css" --metadata title="$TITLE" \
+               -o "$FILENAME.html" "$FILENAME.md"
+        echo "Created $FILENAME.html"
+    else
+        echo "Warning: pandoc not found, HTML output skipped."
+    fi
+}
+
+# Check if we should watch the file (as suggested by README)
+# We can use a simple loop and check modification time if inotifywait isn't available.
+if [[ "$*" == *"--watch"* ]]; then
+    echo "Watching $INPUT_FILE for changes... (Ctrl+C to stop)"
+    LAST_MOD=""
+    while true; do
+        CURRENT_MOD=$(stat -c %Y "$INPUT_FILE" 2>/dev/null)
+        if [ "$CURRENT_MOD" != "$LAST_MOD" ]; then
+            process_file
+            LAST_MOD="$CURRENT_MOD"
+        fi
+        sleep 1
+    done
+else
+    process_file
+fi
