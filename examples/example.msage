@@ -1,0 +1,48 @@
+# Literate SageMath Document
+
+This document demonstrates embedded **SageMath** code blocks and inline execution.
+
+## Basic Arithmetic & Preparsing
+
+In SageMath, `2/3` produces a rational rather than a float, and `2^10` computes exponentiation:
+
+```sage
+a = 2^10
+b = 2/3
+a + b
+```
+
+## Symbolic Calculus
+
+Let us define a variable and compute its derivative:
+
+```sage
+x = var('x')
+f = sin(x^2) * exp(-x)
+diff(f, x)
+```
+
+## Hidden Code with Persistent Context
+
+The following code computes a prime factorization but hides the code:
+
+```hide
+factor(2^32 - 1)
+```
+
+And this block is completely hidden (`hide all`), but defines a matrix `M`:
+
+```hide all
+M = matrix([[1, 2], [3, 4]])
+```
+
+Let us check if `M` was saved in the environment and compute its square:
+
+```sage
+M^2
+```
+
+## Inline SageMath Code
+
+We can evaluate expressions inline using double backticks:
+The prime factors of 2026 are ``factor(2026)``, and the integral $\int_0^\pi \sin(x)\,dx$ evaluates to ``integral(sin(x), x, 0, pi)``.

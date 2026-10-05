@@ -13,6 +13,7 @@ This tool was created to provide a simple way to evaluate embedded code blocks i
 *   **Polyglot Support:** Includes preprocessors for:
     *   **Common Lisp** (`.mlsp`) using SBCL.
     *   **Python** (`.mpy`) using Python 3.
+    *   **SageMath** (`.msage`) using `sage`.
     *   **Clojure** (`.mclj`) using `clj`.
     *   **Scala** (`.msc`) using `scala`.
 *   **Visibility Control:** Use directives to show/hide source code and evaluation results.
@@ -26,7 +27,7 @@ The main entry point is the `mlisp` shell script.
 ./mlisp $FILE [$TITLE]
 ```
 
-*   **$FILE:** The input file with the appropriate extension (`.mlsp`, `.mpy`, `.mclj`, or `.msc`).
+*   **$FILE:** The input file with the appropriate extension (`.mlsp`, `.mpy`, `.msage`, `.mclj`, or `.msc`).
 *   **$TITLE:** (Optional) The title for the generated HTML document. Alternatively, you can specify it in a YAML preamble:
 
 ```markdown

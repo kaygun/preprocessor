@@ -15,7 +15,7 @@ if [ "$1" = "--watch" ] || [ "$1" = "-w" ]; then
 fi
 
 if [ -z "$1" ]; then
-    echo "Usage: mlisp [--watch] <file.mlsp|msc|mpy|mclj> [title]"
+    echo "Usage: mlisp [--watch] <file.mlsp|msc|mpy|mclj|msage> [title]"
     echo "   or: mlisp <extension> <name> [title]"
     exit 1
 fi
@@ -51,11 +51,22 @@ process_once() {
             ;;
         msc)
             echo "A Scala file! Evaluating..."
-            scala "$PLACE/markdown.scala" "$name.msc" "$name.md"
+            if [ -f "$PLACE/markdown.scala" ]; then
+                scala "$PLACE/markdown.scala" "$name.msc" "$name.md"
+            elif [ -f "$PLACE/markdown.sc" ]; then
+                scala "$PLACE/markdown.sc" "$name.msc" > "$name.md"
+            fi
             ;;
         mpy)
             echo "A Python file! Evaluating..."
             python3 "$PLACE/markdown.py" "$name.mpy" "$name.md"
+            ;;
+        msage)
+            echo "A SageMath file! Evaluating..."
+            if [ -f "/home/kaygun/local/venv/bin/activate" ]; then
+                source /home/kaygun/local/venv/bin/activate
+            fi
+            sage "$PLACE/markdown.sage" "$name.msage" "$name.md"
             ;;
         mclj)
             echo "A Clojure file! Evaluating..."
