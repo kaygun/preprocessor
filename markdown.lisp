@@ -1,123 +1,127 @@
-;;;; markdown.lisp — literate-programming preprocessor.
+;;;; markdown.lisp — Polyglot literate programming preprocessor for Common Lisp
 ;;;;
-;;;; Invoked as:
-;;;;   sbcl --script markdown.lisp <input> <output>
-;;;;
-;;;; Reads a Markdown-ish file. Inline `` ...lisp... `` is evaluated and
-;;;; spliced in. Fenced ```...``` blocks are evaluated as a whole; the
-;;;; opening fence may carry directives:
-;;;;   ```hide all   -> evaluate silently
-;;;;   ```hide       -> show results only
-;;;;   ```           -> show source and results
-;;;;
-;;;; SECURITY: this program EVALUATES code from the input file. Only run
-;;;; it on input you trust.
+;;;; Evaluates embedded Common Lisp code in markdown files.
+;;;; Fenced blocks (```) are evaluated sequentially in persistent environment.
+;;;; Directives on opening fence:
+;;;;   ```hide all  -> evaluate silently (no source, no results)
+;;;;   ```hide      -> evaluate and show results only
+;;;;   ```          -> show source and results
+;;;; Inline code:
+;;;;   ``(expr)``   -> evaluated and spliced into text
 
-(require :cl-ppcre)
+(defun starts-with-p (str prefix)
+  "Returns T if STR begins with PREFIX."
+  (let ((plen (length prefix)))
+    (and (>= (length str) plen)
+         (string= str prefix :end1 plen))))
 
-(defpackage :litprog
-  (:use :cl)
-  (:local-nicknames (:re :cl-ppcre)))
+(defun parse-header (line)
+  "Parses a fence header line to determine visibility settings."
+  (cond ((search "hide all" line :test #'char-equal)
+         (list :code nil :results nil))
+        ((search "hide" line :test #'char-equal)
+         (list :code nil :results t))
+        (t
+         (list :code t :results t))))
 
-(in-package :litprog)
+(defun split-by-double-backtick (line)
+  "Splits LINE by double backticks (``) into alternating text and code pieces."
+  (let ((pieces nil)
+        (start 0)
+        (len (length line)))
+    (loop
+      (let ((pos (search "``" line :start2 start)))
+        (if pos
+            (progn
+              (push (subseq line start pos) pieces)
+              (setf start (+ pos 2)))
+            (progn
+              (push (subseq line start len) pieces)
+              (return (nreverse pieces))))))))
 
-;;; --- evaluation ---------------------------------------------------------
+(defun eval-string (x)
+  "Reads and evaluates a single Lisp form from a string."
+  (eval (read-from-string x)))
 
-(defun eval-string (string)
-  "Read and evaluate STRING as Lisp. Returns the value of the last form."
-  (eval (read-from-string string)))
+(defun process-inline-code (line out)
+  "Processes inline code fragments enclosed by double backticks (``)."
+  (let ((pieces (split-by-double-backtick line)))
+    (if (evenp (length pieces))
+        ;; Unmatched delimiter: output line as-is
+        (format out "~a~%" line)
+        (progn
+          (loop for piece in pieces
+                for i from 0
+                do (format out "~a"
+                           (if (evenp i)
+                               piece
+                               (handler-case
+                                   (eval-string piece)
+                                 (error (e)
+                                   (format nil "[Error: ~a]" e))))))
+          (terpri out)))))
 
-(defun eval-lines (lines)
-  "Evaluate LINES (a list of strings) as a sequence of top-level forms.
-Returns a list of their values, one per form."
-  (with-input-from-string (s (format nil "~{~a~%~}" lines))
-    (loop for form = (read s nil 's)
-          until (eq form 's)
-          collect (eval form))))
+(defun eval-forms (lines)
+  "Sequentially reads and evaluates all forms in LINES.
+Returns a list of the non-nil results of top-level expressions."
+  (let ((code-str (format nil "~{~a~%~}" lines)))
+    (with-input-from-string (s code-str)
+      (loop for form = (read s nil :eof)
+            until (eq form :eof)
+            collect (eval form)))))
 
-;;; --- header parsing -----------------------------------------------------
+(defun process-file (input-file output-file)
+  "Reads INPUT-FILE line by line and writes processed markdown to OUTPUT-FILE."
+  (with-open-file (in input-file :direction :input)
+    (with-open-file (out output-file :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
+      (let ((in-code-block nil)
+            (code-buffer nil)
+            (block-settings nil))
+        (do ((line (read-line in nil nil) (read-line in nil nil)))
+            ((null line) nil)
+          (if in-code-block
+              (if (starts-with-p line "```")
+                  ;; Closing code fence
+                  (let* ((lines (nreverse code-buffer))
+                         (show-code (getf block-settings :code))
+                         (show-results (getf block-settings :results))
+                         (results (handler-case
+                                      (eval-forms lines)
+                                    (error (e)
+                                      (list (format nil "Error: ~a" e))))))
+                    (when show-code
+                      (format out "```lisp~%~{~a~%~}```~%" lines))
+                    (when (and show-code show-results results)
+                      (terpri out))
+                    (when (and show-results results)
+                      (format out "```lisp~%~{~a~%~}```~%" results))
+                    (setf in-code-block nil
+                          code-buffer nil
+                          block-settings nil))
+                  ;; Accumulate line in current code block
+                  (push line code-buffer))
+              (if (starts-with-p line "```")
+                  ;; Opening code fence
+                  (setf in-code-block t
+                        code-buffer nil
+                        block-settings (parse-header line))
+                  ;; Normal text line
+                  (process-inline-code line out))))))))
 
-(defstruct directives
-  (show-source  t)
-  (show-results t))
-
-(defun parse-fence (line)
-  "Parse an opening fence line into a DIRECTIVES struct."
-  (cond ((re:scan "hide all" line) (make-directives :show-source nil
-                                                    :show-results nil))
-        ((re:scan "hide"     line) (make-directives :show-source nil
-                                                    :show-results t))
-        (t                         (make-directives))))
-
-(defun fence-line-p (line)
-  (re:scan "^```" line))
-
-;;; --- output -------------------------------------------------------------
-
-(defun emit-text-line (line out)
-  "Write LINE to OUT, evaluating any `` ...`` inline code."
-  (loop for piece in (re:split "``" line)
-        for i from 0
-        do (format out "~a" (if (evenp i) piece (eval-string piece))))
-  (terpri out))
-
-(defun emit-block (out lines directives)
-  "Emit a finished code block according to DIRECTIVES."
-  (let* ((show-src  (directives-show-source  directives))
-         (show-res  (directives-show-results directives))
-         (results   (when (or show-src show-res) (eval-lines lines))))
-    (cond
-      ((and show-src show-res)
-       (format out "```lisp~%~{~a~%~}```~%" lines)
-       (format out "```lisp~%~{~a~%~}```~%" results))
-      (show-src
-       (format out "```lisp~%~{~a~%~}```~%" lines))
-      (show-res
-       (format out "~{~a~%~}" results))
-      (t nil))))
-
-;;; --- main loop ----------------------------------------------------------
-
-(defun process-stream (in out)
-  (let ((in-block   nil)
-        (directives nil)
-        (buffer     '()))                ; collected in reverse
-    (loop for line = (read-line in nil nil)
-          while line do
-          (cond
-            ((and in-block (fence-line-p line))
-             (emit-block out (nreverse buffer) directives)
-             (setf in-block nil
-                   buffer   '()))
-            ((and (not in-block) (fence-line-p line))
-             (setf directives (parse-fence line)
-                   in-block   t
-                   buffer     '()))
-            (in-block
-             (push line buffer))
-            (t
-             (emit-text-line line out))))
-    (when in-block
-      (warn "Input ended inside an unclosed code block."))))
-
-(defun process-file (input-path output-path)
-  (with-open-file (in  input-path  :direction :input)
-    (with-open-file (out output-path :direction :output
-                                     :if-exists :supersede
-                                     :if-does-not-exist :create)
-      (process-stream in out))))
-
-;;; --- script entry point -------------------------------------------------
-
-(defun main (argv)
-  (unless (>= (length argv) 3)
-    (format *error-output*
-            "usage: markdown.lisp <input> <output>~%")
-    (sb-ext:exit :code 2))
-  (handler-case
-      (process-file (elt argv 1) (elt argv 2))
-    (error (c)
-      (format *error-output* "markdown.lisp: ~a~%" c)
-      (sb-ext:exit :code 1))))
-
-(main sb-ext:*posix-argv*)
+;; Entry point
+(let ((args (rest sb-ext:*posix-argv*)))
+  (when (and args (string= (first sb-ext:*posix-argv*) "sbcl"))
+    ;; When running via sbcl --script, args may differ slightly
+    nil)
+  (let ((in-file (first args))
+        (out-file (second args)))
+    (unless (and in-file out-file)
+      (format *error-output* "Usage: sbcl --script markdown.lisp <input.mlsp> <output.md>~%")
+      (sb-ext:exit :code 1))
+    (handler-case
+        (process-file in-file out-file)
+      (error (e)
+        (format *error-output* "markdown.lisp error: ~a~%" e)
+        (sb-ext:exit :code 1)))))

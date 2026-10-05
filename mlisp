@@ -1,85 +1,109 @@
 #!/bin/bash
 
-# Configuration
-PLACE=$HOME/local/lib/
+# Determine directory where mlisp and companion scripts reside
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLACE="${SCRIPT_DIR}"
+if [ ! -f "$PLACE/markdown.lisp" ] && [ -d "${HOME}/local/lib" ]; then
+    PLACE="${HOME}/local/lib"
+fi
+
+# Check for --watch or -w flag
+WATCH_MODE=0
+if [ "$1" = "--watch" ] || [ "$1" = "-w" ]; then
+    WATCH_MODE=1
+    shift
+fi
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <file.ext> [title]"
-    echo "Supported extensions: .mpy, .mlsp, .msc, .mclj"
+    echo "Usage: mlisp [--watch] <file.mlsp|msc|mpy|mclj> [title]"
+    echo "   or: mlisp <extension> <name> [title]"
     exit 1
 fi
 
-INPUT_FILE="$1"
-FILENAME="${INPUT_FILE%.*}"
-EXTENSION="${INPUT_FILE##*.}"
-TITLE="${2:-$FILENAME}"
+# Support both `mlisp <file> [title]` and `mlisp <ext> <name> [title]`
+if [ -f "$1" ]; then
+    filename="$1"
+    title="$2"
+    extension="${filename##*.}"
+    name="${filename%.*}"
+elif [ -n "$2" ] && [ -f "$2.$1" ]; then
+    extension="$1"
+    name="$2"
+    title="$3"
+    filename="$name.$extension"
+else
+    filename="$1"
+    title="$2"
+    extension="${filename##*.}"
+    name="${filename%.*}"
+fi
 
-process_file() {
-    echo "Processing $INPUT_FILE..."
-    
-    # Clean up previous outputs
-    rm -f "$FILENAME.md" "$FILENAME.html"
+process_once() {
+    echo "Processing $name with extension $extension"
 
-    # 1. Run the language-specific preprocessor
-    case "$EXTENSION" in
-        mpy)
-            python3 "$PLACE/markdown.py" "$INPUT_FILE" "$FILENAME.md"
-            ;;
+    [ -f "$name.html" ] && rm -f "$name.html"
+    [ -f "$name.md" ]   && rm -f "$name.md"
+
+    case "$extension" in
         mlsp)
-            sbcl --dynamic-space-size 2000 --core "$PLACE/mlisp.core" \
-                 --script "$PLACE/markdown.lisp" "$INPUT_FILE" "$FILENAME.md"
+            echo "A Common Lisp file! Evaluating..."
+            sbcl --noinform --script "$PLACE/markdown.lisp" "$name.mlsp" "$name.md"
             ;;
         msc)
-            # Assuming markdown.sc is a scala script. 
-            # Note: original used $4 for classpath, here we default to empty if not provided.
-            scala "$PLACE/markdown.sc" "$INPUT_FILE" > "$FILENAME.md"
+            echo "A Scala file! Evaluating..."
+            scala "$PLACE/markdown.scala" "$name.msc" "$name.md"
+            ;;
+        mpy)
+            echo "A Python file! Evaluating..."
+            python3 "$PLACE/markdown.py" "$name.mpy" "$name.md"
             ;;
         mclj)
-            clj -J-Xmx5g -J-Xms5g -J-Xss1g "$PLACE/markdown.clj" "$INPUT_FILE" "$FILENAME.md"
+            echo "A Clojure file! Evaluating..."
+            clj -M "$PLACE/markdown.clj" "$name.mclj" "$name.md"
             ;;
         *)
-            echo "Unknown extension: $EXTENSION"
+            echo "Unsupported extension: .$extension"
             return 1
             ;;
     esac
 
-    if [ ! -f "$FILENAME.md" ]; then
-        echo "Error: Preprocessor failed to create $FILENAME.md"
-        return 1
-    fi
+    if [ -f "$name.md" ]; then
+        # Append footer with timestamp BEFORE pandoc conversion so it is included in HTML
+        echo -e "\n\n::: {#footer}" >> "$name.md"
+        echo "[" "$(date +'%B %d, %Y %r')" "]{#timestamp}" >> "$name.md"
+        echo ":::" >> "$name.md"
 
-    # 2. Add footer to Markdown BEFORE pandoc runs so it's included in HTML
-    {
-        echo -e "\n\n"
-        echo "::: {#footer}"
-        echo "[" $(date +"%B %d, %Y %r") "]{#timestamp}"
-        echo ":::"
-    } >> "$FILENAME.md"
+        css_args=()
+        if [ -f "$PLACE/mlisp.css" ]; then
+            css_args=(--css "$PLACE/mlisp.css")
+        elif [ -f "./mlisp.css" ]; then
+            css_args=(--css "./mlisp.css")
+        fi
 
-    # 3. Convert to HTML
-    if command -v pandoc >/dev/null 2>&1; then
         pandoc -s -f markdown -t html --mathjax --highlight-style=tango \
-               --css "$PLACE/mlisp.css" --metadata title="$TITLE" \
-               -o "$FILENAME.html" "$FILENAME.md"
-        echo "Created $FILENAME.html"
+               "${css_args[@]}" --metadata title="$title" \
+               -o "$name.html" "$name.md"
+
+        cat "$name.md"
     else
-        echo "Warning: pandoc not found, HTML output skipped."
+        echo "Error: Processing did not produce $name.md"
+        return 1
     fi
 }
 
-# Check if we should watch the file (as suggested by README)
-# We can use a simple loop and check modification time if inotifywait isn't available.
-if [[ "$*" == *"--watch"* ]]; then
-    echo "Watching $INPUT_FILE for changes... (Ctrl+C to stop)"
-    LAST_MOD=""
+if [ "$WATCH_MODE" -eq 1 ]; then
+    echo "Watching $filename for changes (Ctrl+C to stop)..."
+    process_once
+    last_mod=""
     while true; do
-        CURRENT_MOD=$(stat -c %Y "$INPUT_FILE" 2>/dev/null)
-        if [ "$CURRENT_MOD" != "$LAST_MOD" ]; then
-            process_file
-            LAST_MOD="$CURRENT_MOD"
+        current_mod=$(stat -c %Y "$filename" 2>/dev/null)
+        if [ "$current_mod" != "$last_mod" ]; then
+            last_mod="$current_mod"
+            echo "File changed at $(date +'%T'). Recompiling..."
+            process_once
         fi
-        sleep 1
+        sleep 2
     done
 else
-    process_file
+    process_once
 fi
